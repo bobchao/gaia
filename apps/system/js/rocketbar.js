@@ -1,6 +1,5 @@
 'use strict';
-/* global SettingsListener, AppWindowManager, SearchWindow, places,
-          SettingsURL */
+/* global AppWindowManager, SearchWindow, places */
 
 (function(exports) {
 
@@ -34,18 +33,6 @@
     this.results = document.getElementById('rocketbar-results');
     this.backdrop = document.getElementById('rocketbar-backdrop');
     this.start();
-
-    // TODO: We shouldnt be creating a blob for each wallpaper that needs
-    // changed in the system app
-    // https://bugzilla.mozilla.org/show_bug.cgi?id=962902
-    var defaultWall = 'resources/images/backgrounds/default.png';
-    var wallpaperURL = new SettingsURL();
-
-    SettingsListener.observe('wallpaper.image', defaultWall, function(value) {
-      document.getElementById('rocketbar-backdrop').style.backgroundImage =
-        'url(' + wallpaperURL.set(value) + ')';
-    });
-
   }
 
   Rocketbar.prototype = {
@@ -126,8 +113,9 @@
       this.active = false;
 
       var backdrop = this.backdrop;
-
+      var finishTimeout;
       var finish = (function() {
+        clearTimeout(finishTimeout);
         this.form.classList.add('hidden');
         this.rocketbar.classList.remove('active');
         this.screen.classList.remove('rocketbar-focused');
@@ -145,6 +133,8 @@
           window.removeEventListener('keyboardhidden', onhiddenkeyboard);
           finish();
         });
+        // Fallback plan in case we don't get a keyboardhidden event.
+        finishTimeout = setTimeout(finish, 1000);
         this.blur();
       } else {
         finish();
@@ -162,6 +152,8 @@
       window.addEventListener('apptitlechange', this);
       window.addEventListener('lockscreen-appopened', this);
       window.addEventListener('appopened', this);
+      window.addEventListener('launchapp', this);
+      window.addEventListener('open-app', this);
       window.addEventListener('home', this);
       window.addEventListener('launchactivity', this, true);
       window.addEventListener('searchterminated', this);
@@ -196,6 +188,8 @@
         case 'apploading':
         case 'appforeground':
         case 'appopened':
+        case 'launchapp':
+        case 'open-app':
           this.hideResults();
           this.deactivate();
           break;
@@ -220,6 +214,7 @@
           } else if (e.target == this.clearBtn) {
             this.clear();
           } else if (e.target == this.backdrop) {
+            this.hideResults();
             this.deactivate();
           }
           break;

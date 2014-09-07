@@ -111,12 +111,14 @@
 
     if (!this.config.chrome) {
       this.config.chrome = {
-        scrollable: this.isBrowser()
+        scrollable: this.isBrowser(),
+        maximized: this.isBrowser()
       };
     } else if (this.config.chrome.navigation) {
+      this.config.chrome.scrollable = !this.isFullScreen();
       // This is for backward compatibility with application that
       // requests the |navigation| flag in their manifest.
-      this.config.chrome.scrollable = true;
+      this.config.chrome.maximized = true;
     }
 
     if (!this.manifest && this.config && this.config.title) {
@@ -525,6 +527,7 @@
             ' " id="' + this.instanceID +
             '" transition-state="closed">' +
               '<div class="titlebar">' +
+              ' <div class="notifications-shadow"></div>' +
               ' <div class="statusbar-shadow titlebar-maximized"></div>' +
               ' <div class="statusbar-shadow titlebar-minimized"></div>' +
               '</div>' +
@@ -1307,7 +1310,7 @@
       return this._fullScreen;
     }
     // Fullscreen
-    this._fullScreen = (this.manifest &&
+    this._fullScreen = !!(this.manifest &&
       ('fullscreen' in this.manifest ? this.manifest.fullscreen : false)) ||
       this.isFullScreenLayout();
     return this._fullScreen;
@@ -1322,9 +1325,9 @@
       return this._fullScreenLayout;
     }
     // Fullscreen
-    this._fullScreenLayout = this.manifest &&
+    this._fullScreenLayout = !!(this.manifest &&
       ('fullscreen_layout' in this.manifest ? this.manifest.fullscreen_layout :
-        false);
+        false));
     return this._fullScreenLayout;
   };
 

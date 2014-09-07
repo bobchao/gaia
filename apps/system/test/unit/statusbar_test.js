@@ -132,11 +132,14 @@ suite('system/Statusbar', function() {
 
       // executing init again
       StatusBar.init();
+      StatusBar.finishInit();
 
       var signalElements = document.querySelectorAll('.statusbar-signal');
       var dataElements = document.querySelectorAll('.statusbar-data');
+      var roamingElems = document.querySelectorAll('.sb-icon-roaming');
 
       fakeIcons.signals = {};
+      fakeIcons.roaming = {};
       Array.prototype.slice.call(signalElements).forEach(
         function(signal, index) {
           fakeIcons.signals[mobileConnectionCount - index - 1] = signal;
@@ -145,6 +148,10 @@ suite('system/Statusbar', function() {
       fakeIcons.data = {};
       Array.prototype.slice.call(dataElements).forEach(function(data, index) {
         fakeIcons.data[mobileConnectionCount - index - 1] = data;
+      });
+
+      Array.prototype.slice.call(roamingElems).forEach(function(data, index) {
+        fakeIcons.roaming[mobileConnectionCount - index - 1] = data;
       });
 
       done();
@@ -173,6 +180,81 @@ suite('system/Statusbar', function() {
       assert.equal(Object.keys(fakeIcons.signals).length,
         mobileConnectionCount);
       assert.equal(Object.keys(fakeIcons.data).length, mobileConnectionCount);
+    });
+  });
+
+  suite('init when FTU is running', function() {
+    setup(function() {
+      this.sinon.stub(StatusBar, 'finishInit');
+    });
+
+    test('skipping FTU finishes initialization', function() {
+      var evt = new CustomEvent('ftuskip');
+      StatusBar.handleEvent(evt);
+      assert.isTrue(StatusBar.finishInit.called);
+    });
+
+    test('finish init immediately during upgrade', function() {
+      FtuLauncher.mIsUpgrading = true;
+      var evt = new CustomEvent('ftuopen');
+      StatusBar.handleEvent(evt);
+      assert.isTrue(StatusBar.finishInit.called);
+    });
+
+    test('finish init only after ftu', function() {
+      FtuLauncher.mIsUpgrading = false;
+      var evt = new CustomEvent('ftuopen');
+      StatusBar.handleEvent(evt);
+      assert.isTrue(StatusBar.finishInit.notCalled);
+      evt = new CustomEvent('ftudone');
+      StatusBar.handleEvent(evt);
+      assert.isTrue(StatusBar.finishInit.called);
+    });
+  });
+
+  suite('handle FTU progress events', function() {
+    setup(function() {
+      this.sinon.stub(StatusBar, 'addSettingsListener');
+    });
+
+    test('data step displays connections', function() {
+      this.sinon.stub(StatusBar, 'createConnectionsElements');
+      var evt = new CustomEvent('iac-ftucomms', {
+        detail: {
+          type: 'step',
+          hash: '#data_3g'
+        }
+      });
+      StatusBar.handleEvent(evt);
+      assert.isTrue(StatusBar.createConnectionsElements.called);
+      assert.isTrue(StatusBar.addSettingsListener
+                    .calledWith('ril.data.enabled'));
+    });
+
+    test('wifi step activates wifi', function() {
+      this.sinon.stub(StatusBar, 'setActiveWifi');
+      var evt = new CustomEvent('iac-ftucomms', {
+        detail: {
+          type: 'step',
+          hash: '#wifi'
+        }
+      });
+      StatusBar.handleEvent(evt);
+      assert.isTrue(StatusBar.setActiveWifi.called);
+      assert.isTrue(StatusBar.addSettingsListener
+                    .calledWith('wifi.enabled'));
+    });
+
+    test('timezone step activates time', function() {
+      this.sinon.stub(StatusBar, 'toggleTimeLabel');
+      var evt = new CustomEvent('iac-ftucomms', {
+        detail: {
+          type: 'step',
+          hash: '#date_and_time'
+        }
+      });
+      StatusBar.handleEvent(evt);
+      assert.isTrue(StatusBar.toggleTimeLabel.called);
     });
   });
 
@@ -254,6 +336,7 @@ suite('system/Statusbar', function() {
     test('first launch', function() {
       System.locked = true;
       StatusBar.init();
+      StatusBar.finishInit();
       assert.equal(StatusBar.clock.timeoutID, null);
       assert.equal(StatusBar.icons.time.hidden, true);
     });
@@ -639,7 +722,7 @@ suite('system/Statusbar', function() {
 
           StatusBar.update.signal.call(StatusBar);
 
-          assert.equal(dataset.roaming, 'true');
+          assert.equal(fakeIcons.roaming[0].hidden, false);
           assert.equal(dataset.level, 4);
           assert.notEqual(dataset.searching, 'true');
         });
@@ -845,6 +928,11 @@ suite('system/Statusbar', function() {
       StatusBar.settingValues['ril.cf.enabled'] = defaultValue;
     });
 
+    test('createCallForwardingsElements shouldn\'t display icons', function() {
+      StatusBar.createCallForwardingsElements();
+      assert.isTrue(StatusBar.icons.callForwardings.hidden);
+    });
+
     function slotIndexTests(slotIndex) {
       suite('slot: ' + slotIndex, function() {
         test('call forwarding enabled', function() {
@@ -869,6 +957,11 @@ suite('system/Statusbar', function() {
   });
 
   suite('data connection', function() {
+    test('createConnectionsElements shouldn\'t display icons', function() {
+      StatusBar.createConnectionsElements();
+      assert.isTrue(StatusBar.icons.connections.hidden);
+    });
+
     function slotIndexTests(slotIndex) {
       suite('slot: ' + slotIndex, function() {
         suite('data connection unavailable', function() {
@@ -1365,7 +1458,7 @@ suite('system/Statusbar', function() {
         getTopMostWindow: function() {
           return app;
         },
-
+        config: {},
         _element: null,
         get element() {
           if (!this._element) {
